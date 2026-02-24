@@ -28,8 +28,8 @@ class RoleCreate(BaseModel):
 
     username: str = Field(min_length=1, max_length=100)
     realname: str = Field(min_length=1, max_length=200)
-    email: EmailStr
-    password: str = Field(min_length=8, description="Minimum 8 characters")
+    email: Optional[EmailStr] = Field(default=None, description="None = pure role (cannot login)")
+    password: Optional[str] = Field(default=None, min_length=8, description="Required if email is set")
     operator: bool = False
     active: bool = True
     permissions: str = ""
@@ -48,7 +48,7 @@ class RoleUpdate(BaseModel):
 
     username: str = Field(min_length=1, max_length=100)
     realname: str = Field(min_length=1, max_length=200)
-    email: EmailStr
+    email: Optional[EmailStr] = Field(default=None, description="None = pure role (cannot login)")
     password: Optional[str] = Field(
         default=None, min_length=8, description="Leave empty to keep existing"
     )
@@ -85,7 +85,7 @@ class RoleResponse(BaseModel):
     role_id: str
     username: str
     realname: str
-    email: str
+    email: Optional[str] = Field(default=None, description="None = pure role (cannot login)")
     operator: bool
     active: bool
     permissions: str

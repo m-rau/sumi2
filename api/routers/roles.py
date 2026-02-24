@@ -5,7 +5,7 @@ from bson import ObjectId
 from fastapi import APIRouter, HTTPException, Query, status
 from fastapi.responses import JSONResponse
 
-from api.dependencies import CurrentOperator, CurrentUser
+from api.dependencies import CurrentOperator, RolesReadUser, RolesWriteUser
 from api.models.role import Role
 from api.schemas.role import (
     PaginatedRolesResponse,
@@ -66,13 +66,14 @@ async def build_role_response(role: Role, created_at: Optional[str] = None) -> R
 
 @router.get("", response_model=PaginatedRolesResponse)
 async def list_roles(
-    current_user: CurrentUser,
+    read_user: RolesReadUser,
     offset: int = Query(default=0, ge=0, description="Number of records to skip"),
     limit: int = Query(default=20, ge=1, le=100, description="Max records to return"),
     search: Optional[str] = Query(default=None, description="Search in username, realname, email, active/-, operator/-"),
 ):
     """
     List all current roles with pagination and search.
+    Requires operator or api://auth/r permission.
 
     Search examples:
     - `michael` - matches users with "michael" in name/email
@@ -96,16 +97,16 @@ async def list_roles(
 
 
 @router.get("/{identifier}", response_model=RoleResponse)
-async def get_role(identifier: str, current_user: CurrentUser):
-    """Get current version of a role by role_id or username."""
+async def get_role(identifier: str, read_user: RolesReadUser):
+    """Get current version of a role by role_id or username. Requires operator or api://auth/r permission."""
     role = await resolve_role_or_404(identifier)
     return await build_role_response(role)
 
 
 @router.post("", response_model=RoleResponse, status_code=status.HTTP_201_CREATED)
-async def create_new_role(data: RoleCreate, current_operator: CurrentOperator):
-    """Create a new role. Requires operator privileges."""
-    role = await create_role(data, actor_role_id=current_operator.role_id)
+async def create_new_role(data: RoleCreate, write_user: RolesWriteUser):
+    """Create a new role. Requires operator or api://auth/w permission."""
+    role = await create_role(data, actor_role_id=write_user.role_id)
     return await build_role_response(role, created_at=role.modified_at)
 
 
@@ -114,7 +115,7 @@ async def update_existing_role(
     identifier: str,
     version_id: str,
     data: RoleUpdate,
-    current_operator: CurrentOperator,
+    write_user: RolesWriteUser,
 ):
     """
     Full update of a role with optimistic locking.
@@ -122,12 +123,13 @@ async def update_existing_role(
     The identifier can be role_id or username.
     The version_id must match the current version's _id.
     Returns 409 Conflict if the role was modified by another user.
+    Requires operator or api://auth/w permission.
     """
     role = await resolve_role_or_404(identifier)
     vid = validate_version_id(version_id)
 
     try:
-        updated_role = await update_role(role.role_id, vid, data, actor_role_id=current_operator.role_id)
+        updated_role = await update_role(role.role_id, vid, data, actor_role_id=write_user.role_id)
     except ConcurrentModificationError as e:
         return JSONResponse(
             status_code=status.HTTP_409_CONFLICT,
@@ -146,7 +148,7 @@ async def patch_existing_role(
     identifier: str,
     version_id: str,
     data: RolePatch,
-    current_operator: CurrentOperator,
+    write_user: RolesWriteUser,
 ):
     """
     Partial update of a role with optimistic locking.
@@ -154,12 +156,13 @@ async def patch_existing_role(
     The identifier can be role_id or username.
     The version_id must match the current version's _id.
     Returns 409 Conflict if the role was modified by another user.
+    Requires operator or api://auth/w permission.
     """
     role = await resolve_role_or_404(identifier)
     vid = validate_version_id(version_id)
 
     try:
-        updated_role = await patch_role(role.role_id, vid, data, actor_role_id=current_operator.role_id)
+        updated_role = await patch_role(role.role_id, vid, data, actor_role_id=write_user.role_id)
     except ConcurrentModificationError as e:
         return JSONResponse(
             status_code=status.HTTP_409_CONFLICT,
@@ -174,15 +177,15 @@ async def patch_existing_role(
 
 
 @router.delete("/{identifier}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_existing_role(identifier: str, current_operator: CurrentOperator):
-    """Delete all versions of a role. Requires operator privileges. Identifier can be role_id or username."""
+async def delete_existing_role(identifier: str, write_user: RolesWriteUser):
+    """Delete all versions of a role. Requires operator or api://auth/w permission. Identifier can be role_id or username."""
     role = await resolve_role_or_404(identifier)
     await delete_role(role.role_id)
 
 
 @router.get("/{identifier}/permissions", response_model=ResolvedPermissions)
-async def get_role_permissions(identifier: str, current_user: CurrentUser):
-    """Get resolved permissions for a role (including inherited). Identifier can be role_id or username."""
+async def get_role_permissions(identifier: str, read_user: RolesReadUser):
+    """Get resolved permissions for a role (including inherited). Requires operator or api://auth/r permission. Identifier can be role_id or username."""
     role = await resolve_role_or_404(identifier)
 
     permissions, contributors = await get_resolved_permissions_for_role(role.role_id)

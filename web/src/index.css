@@ -1,0 +1,119 @@
+@import "tailwindcss";
+
+@theme {
+  /* LCARS Color System - Star Trek TNG inspired */
+
+  /* Primary colors */
+  --color-lcars-orange: #FF9900;
+  --color-lcars-lavender: #CC99CC;
+  --color-lcars-periwinkle: #9999FF;
+  --color-lcars-sky: #99CCFF;
+  --color-lcars-sage: #99CC99;
+  --color-lcars-gold: #FFCC66;
+  --color-lcars-salmon: #CC6666;
+
+  /* Dark variants */
+  --color-lcars-orange-dark: #CC7A00;
+  --color-lcars-lavender-dark: #9966CC;
+  --color-lcars-periwinkle-dark: #6666CC;
+
+  /* Surface colors */
+  --color-surface-dark: #1A1A2E;
+  --color-surface-darker: #0D0D1A;
+  --color-surface-panel: #16213E;
+
+  /* Background */
+  --color-bg-dark: #000000;
+  --color-bg-light: #E8E8F0;
+
+  /* Text */
+  --color-text-light: #FFFFFF;
+  --color-text-muted: #8888AA;
+
+  /* Fonts */
+  --font-lcars: 'Helvetica Neue', 'Arial', sans-serif;
+
+  /* Border radius */
+  --radius-lcars: 1.5rem;
+  --radius-lcars-lg: 2.5rem;
+  --radius-lcars-sm: 0.75rem;
+
+  /* Spacing */
+  --spacing-lcars: 0.5rem;
+}
+
+/* Base styles */
+html {
+  font-family: var(--font-lcars);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  @apply bg-bg-dark text-text-light min-h-screen m-0;
+}
+
+/* Custom scrollbar for LCARS theme */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-surface-darker;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-lcars-orange rounded-full;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-lcars-gold;
+}
+
+/* LCARS-style focus rings */
+*:focus-visible {
+  @apply outline-none ring-2 ring-lcars-orange ring-offset-2 ring-offset-bg-dark;
+}
+
+/* Light mode overrides */
+.light {
+  --color-bg-dark: #E8E8F0;
+  --color-surface-dark: #FFFFFF;
+  --color-surface-darker: #D0D0E0;
+  --color-surface-panel: #F0F0F8;
+  --color-text-light: #1A1A2E;
+  --color-text-muted: #666688;
+}
+
+.light body {
+  @apply bg-bg-dark text-text-light;
+}
+
+/* Utility classes for LCARS */
+.lcars-text-glow {
+  text-shadow: 0 0 10px currentColor;
+}
+
+.lcars-panel-glow {
+  box-shadow: 0 0 20px rgba(255, 153, 0, 0.3);
+}
+
+/* Animation utilities */
+@keyframes lcars-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+.lcars-pulse {
+  animation: lcars-pulse 2s ease-in-out infinite;
+}
+
+@keyframes lcars-scan {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+.lcars-scan {
+  animation: lcars-scan 2s linear infinite;
+}

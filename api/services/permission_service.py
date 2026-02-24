@@ -21,12 +21,15 @@ def permission_matches(granted: str, requested: str) -> bool:
     """
     Check if a granted permission covers the requested permission.
     Supports * wildcard at the end of paths.
+    Write permission (/x) also grants read permission (base path).
 
     Examples:
     - "app://my-app/*" matches "app://my-app/admin" -> True
     - "app://my-app/admin" matches "app://my-app/admin" -> True
     - "app://my-app/admin" matches "app://my-app/*" -> False
     - "*://*/*" matches anything -> True
+    - "api://auth/x" matches "api://auth" -> True (write implies read)
+    - "api://auth" matches "api://auth/x" -> False (read doesn't imply write)
     """
     if granted == requested:
         return True
@@ -38,6 +41,12 @@ def permission_matches(granted: str, requested: str) -> bool:
     if granted.endswith("/*"):
         prefix = granted[:-1]  # "app://my-app/"
         return requested.startswith(prefix)
+
+    # Write permission (/x) also grants read permission (base path)
+    if granted.endswith("/x"):
+        base = granted[:-2]  # Remove "/x"
+        if requested == base:
+            return True
 
     return False
 

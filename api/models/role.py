@@ -23,8 +23,8 @@ class Role(Document):
         description="Unique among current versions"
     )
     realname: str
-    email: Annotated[str, Indexed()] = Field(
-        description="Unique among current versions"
+    email: Annotated[Optional[str], Indexed()] = Field(
+        default=None, description="Unique among current versions. None = pure role (cannot login)"
     )
     password_hash: str
     operator: bool = Field(default=False, description="Admin flag")

@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr, Field
 
 
 class Token(BaseModel):
@@ -24,9 +24,17 @@ class MeResponse(BaseModel):
     role_id: str
     username: str
     realname: str
-    email: str
+    email: Optional[str]
     operator: bool
     active: bool
     permissions: list[str]
     created_at: Optional[datetime]
     last_login: Optional[datetime]
+
+
+class ProfileUpdate(BaseModel):
+    """Schema for updating own profile. All fields optional."""
+
+    realname: Optional[str] = Field(default=None, min_length=1, max_length=200)
+    email: Optional[EmailStr] = None
+    password: Optional[str] = Field(default=None, min_length=8)

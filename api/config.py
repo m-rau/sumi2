@@ -18,6 +18,18 @@ class Settings(BaseSettings):
     # Rate Limiting
     rate_limit_login: str = "5/minute"
 
+    # SMTP / Email
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: str = ""
+    smtp_from: str = "noreply@localhost"
+    smtp_use_tls: bool = True
+
+    # Password Reset
+    password_reset_expire_minutes: int = 120
+    frontend_url: str = "http://localhost:5173"
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

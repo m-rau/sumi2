@@ -53,3 +53,9 @@ Thumbs.db
 # Logs
 *.log
 logs/
+
+# Node.js / Web
+node_modules/
+web/dist/
+web/.vite/
+*.local

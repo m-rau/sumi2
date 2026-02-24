@@ -18,12 +18,12 @@ class ConcurrentModificationError(Exception):
         super().__init__("Role was modified by another user")
 
 
-def build_search_text(username: str, realname: str, email: str, active: bool, operator: bool) -> str:
+def build_search_text(username: str, realname: str, email: Optional[str], active: bool, operator: bool) -> str:
     """Build searchable text from role fields."""
     parts = [
         username,
         realname,
-        email,
+        email or "",
         "active" if active else "-",
         "operator" if operator else "-",
     ]
@@ -42,7 +42,7 @@ async def get_all_current_roles(
 ) -> tuple[list[Role], int]:
     """
     Get all current role versions with optional search.
-    Returns (roles, total_count).
+    Returns (roles, total_count) sorted by username (case-insensitive).
     """
     query = {"current": True}
 
@@ -50,7 +50,15 @@ async def get_all_current_roles(
         query["search_text"] = {"$regex": search.lower()}
 
     total = await Role.find(query).count()
-    roles = await Role.find(query).skip(offset).limit(limit).to_list()
+
+    # Use pymongo directly for collation support (case-insensitive sort)
+    cursor = Role.get_pymongo_collection().find(query).sort("username", 1).collation(
+        {"locale": "en", "strength": 2}
+    ).skip(offset).limit(limit)
+
+    docs = await cursor.to_list(length=limit)
+    # Parse docs into Beanie Role documents (handle _id -> id mapping)
+    roles = [Role.model_validate({**doc, "id": doc["_id"]}) for doc in docs]
 
     return roles, total
 
@@ -77,8 +85,10 @@ async def check_username_unique(username: str, exclude_role_id: Optional[Pydanti
     return existing is None
 
 
-async def check_email_unique(email: str, exclude_role_id: Optional[PydanticObjectId] = None) -> bool:
-    """Check if email is unique among current versions."""
+async def check_email_unique(email: Optional[str], exclude_role_id: Optional[PydanticObjectId] = None) -> bool:
+    """Check if email is unique among current versions. None emails are always allowed (pure roles)."""
+    if email is None:
+        return True
     query = {"current": True, "email": email}
     if exclude_role_id:
         query["role_id"] = {"$ne": exclude_role_id}
@@ -113,13 +123,16 @@ async def create_role(data: RoleCreate, actor_role_id: Optional[PydanticObjectId
     # Resolve parent role usernames to role_ids
     parent_role_ids = await resolve_usernames_to_role_ids(data.roles)
 
+    # Hash password if provided, otherwise empty string (pure role)
+    password_hash = hash_password(data.password) if data.password else ""
+
     role = Role(
         role_id=PydanticObjectId(),
         current=True,
         username=data.username,
         realname=data.realname,
         email=data.email,
-        password_hash=hash_password(data.password),
+        password_hash=password_hash,
         operator=data.operator,
         active=data.active,
         permissions=data.permissions,
@@ -360,6 +373,19 @@ async def get_role_by_username(username: str) -> Optional[Role]:
     return await Role.find_one({"current": True, "username": username})
 
 
+async def get_role_by_email(email: str) -> Optional[Role]:
+    """Get current role by email (for password reset)."""
+    return await Role.find_one({"current": True, "email": email})
+
+
+async def update_password(role_id: PydanticObjectId, new_password_hash: str) -> None:
+    """Update password in-place on the current version (no new version created)."""
+    await Role.get_pymongo_collection().update_one(
+        {"role_id": role_id, "current": True},
+        {"$set": {"password_hash": new_password_hash}},
+    )
+
+
 async def resolve_role_identifier(identifier: str) -> Optional[Role]:
     """
     Resolve a role identifier (either role_id or username) to a Role.
@@ -406,3 +432,70 @@ async def resolve_role_ids_to_usernames(role_ids: list[PydanticObjectId]) -> lis
             )
         usernames.append(role.username)
     return usernames
+
+
+async def update_own_profile(
+    role_id: PydanticObjectId,
+    realname: Optional[str] = None,
+    email: Optional[str] = None,
+    password: Optional[str] = None,
+) -> Role:
+    """
+    Update own profile (realname, email, password only).
+    Creates a new version like other updates.
+    """
+    current = await get_current_version(role_id)
+    if not current:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Role not found",
+        )
+
+    # Build updated values
+    new_realname = realname if realname is not None else current.realname
+    new_email = email if email is not None else current.email
+
+    # Check email uniqueness if changed
+    if email is not None and email != current.email:
+        if not await check_email_unique(email, exclude_role_id=role_id):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Email '{email}' already exists",
+            )
+
+    # Atomically mark current version as non-current
+    result = await Role.get_pymongo_collection().update_one(
+        {"role_id": role_id, "_id": current.id, "current": True},
+        {"$set": {"current": False}},
+    )
+
+    if result.modified_count == 0:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Profile was modified. Please try again.",
+        )
+
+    # Determine password hash
+    password_hash = hash_password(password) if password else current.password_hash
+
+    # Insert new version
+    new_version = Role(
+        role_id=role_id,
+        current=True,
+        username=current.username,
+        realname=new_realname,
+        email=new_email,
+        password_hash=password_hash,
+        operator=current.operator,
+        active=current.active,
+        permissions=current.permissions,
+        roles=current.roles,
+        last_login=current.last_login,
+        modified_by=role_id,  # Self-modified
+        modified_at=datetime.utcnow(),
+        search_text=build_search_text(
+            current.username, new_realname, new_email, current.active, current.operator
+        ),
+    )
+    await new_version.insert()
+    return new_version

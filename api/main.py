@@ -10,7 +10,7 @@ from slowapi.errors import RateLimitExceeded
 
 from api.config import settings
 from api.database import close_db, init_db
-from api.dependencies import limiter
+from api.dependencies import HealthUser, limiter
 from api.models.role import Role
 from api.routers import auth, roles
 from api.services.auth_service import hash_password
@@ -85,6 +85,6 @@ app.include_router(roles.router)
 
 
 @app.get("/health")
-async def health_check():
-    """Health check endpoint."""
+async def health_check(health_user: HealthUser):
+    """Health check endpoint. Requires api://health permission."""
     return {"status": "healthy"}
